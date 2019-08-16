@@ -112,6 +112,14 @@ if(CACHE_FRIENDLY_OFFSET)
   target_compile_definitions(snmalloc_lib INTERFACE -DCACHE_FRIENDLY_OFFSET=${CACHE_FRIENDLY_OFFSET})
 endif()
 
+find_package(Git)
+execute_process(COMMAND
+  "${GIT_EXECUTABLE}" describe --match=NeVeRmAtCh --always --abbrev=40 --dirty
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+target_compile_definitions(snmalloc_lib INTERFACE GIT_VERSION="${GIT_VERSION}")
+
 # To build with just the header library target define SNMALLOC_ONLY_HEADER_LIBRARY
 # in containing Cmake file.
 if(NOT DEFINED SNMALLOC_ONLY_HEADER_LIBRARY)
@@ -143,9 +151,10 @@ if(NOT DEFINED SNMALLOC_ONLY_HEADER_LIBRARY)
   endmacro()
 
   macro(add_shim name)
-    add_library(${name} SHARED src/override/malloc.cc src/override/new.cc)
+    add_library(${name} SHARED src/override/malloc.cc src/override/new.cc src/mem/announce_configuration.cc)
     target_link_libraries(${name} snmalloc_lib)
     target_compile_definitions(${name} PRIVATE "SNMALLOC_EXPORT=__attribute__((visibility(\"default\")))")
+    target_compile_definitions(${name} PRIVATE GIT_VERSION="${GIT_VERSION}")
     set_target_properties(${name} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
     if(EXPOSE_EXTERNAL_PAGEMAP)
@@ -181,7 +190,7 @@ if(NOT DEFINED SNMALLOC_ONLY_HEADER_LIBRARY)
         aux_source_directory(${TESTDIR}/${TEST_CATEGORY}/${TEST} SRC)
         set(TESTNAME "${TEST_CATEGORY}-${TEST}-${SUPER_SLAB_SIZE}")
 
-        add_executable(${TESTNAME} ${SRC})
+        add_executable(${TESTNAME} ${SRC} src/mem/announce_configuration.cc)
         if (${SUPER_SLAB_SIZE} EQUAL 1)
           target_compile_definitions(${TESTNAME} PRIVATE IS_ADDRESS_SPACE_CONSTRAINED)
         endif()
