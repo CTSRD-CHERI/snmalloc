@@ -232,7 +232,7 @@ namespace snmalloc
           PagemapProvider::pagemap().get(address_cast(p)));
         if constexpr (offset)
         {
-#if defined(__CHERI__)
+#if defined(__CHERI_PURE_CAPABILITY__)
           size_t delta = pointer_diff_without_provenance(pmp, p);
 #else
           size_t delta = pointer_diff(pmp, p);
@@ -1818,7 +1818,7 @@ namespace snmalloc
         privp = page_map.getp(p);
       }
 
-#  if defined(__CHERI__)
+#  if defined(__CHERI_PURE_CAPABILITY__)
       /*
        * It is possible that the user-provided capability p is untagged; it
        * might, for example, have been revoked.  If that's true now, bail
@@ -1903,7 +1903,7 @@ namespace snmalloc
           return 0;
       }
 
-#  if defined(__CHERI__)
+#  if defined(__CHERI_PURE_CAPABILITY__)
       ss = address_cast(cheri_setaddress(p, ss));
 #  endif
 
@@ -2232,7 +2232,7 @@ namespace snmalloc
       uint8_t* priv_res =
         static_cast<uint8_t*>(end_point_correction) - end_to_end;
 
-#if defined(__CHERI__)
+#if defined(__CHERI_PURE_CAPABILITY__)
       uint8_t* res =
         static_cast<uint8_t*>(cheri_setaddress(p, cheri_getaddress(priv_res)));
 #else
