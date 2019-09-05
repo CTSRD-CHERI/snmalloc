@@ -156,6 +156,12 @@ if(NOT DEFINED SNMALLOC_ONLY_HEADER_LIBRARY)
     if(EXPOSE_EXTERNAL_RESERVE)
       target_compile_definitions(${name} PRIVATE -DSNMALLOC_EXPOSE_RESERVE)
     endif()
+
+    # Avoid linking against the C++ standard library. This is especially
+    # important when trying to use snmalloc with LD_PRELOAD on a minimal
+    # OS image that does not have a C++ library installed.
+    set_target_properties(${name} PROPERTIES LINKER_LANGUAGE C)
+
   endmacro()
 
   if(NOT MSVC)
