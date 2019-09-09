@@ -1,5 +1,6 @@
 #include <snmalloc.h>
 #include <test/measuretime.h>
+#include <test/setup.h>
 #include <test/xoroshiro.h>
 #include <unordered_set>
 
@@ -53,7 +54,13 @@ namespace test
 #ifdef NDEBUG
     static constexpr size_t iterations = 10000000;
 #else
+#  ifdef _MSC_VER
+    // Windows Debug build is very slow on this test.
+    // Reduce complexity to balance CI times.
+    static constexpr size_t iterations = 50000;
+#  else
     static constexpr size_t iterations = 100000;
+#  endif
 #endif
     setup(r, alloc);
 
@@ -78,6 +85,8 @@ namespace test
 
 int main(int, char**)
 {
+  setup();
+
   xoroshiro::p128r64 r;
 #ifdef NDEBUG
   size_t nn = 30;

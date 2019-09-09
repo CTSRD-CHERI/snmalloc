@@ -136,7 +136,7 @@ extern "C"
     return p;
   }
 
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
   SNMALLOC_EXPORT void*
     SNMALLOC_NAME_MANGLE(reallocarray)(void* ptr, size_t nmemb, size_t size)
   {
@@ -212,7 +212,7 @@ extern "C"
     return 0;
   }
 
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
   SNMALLOC_EXPORT void* SNMALLOC_NAME_MANGLE(valloc)(size_t size)
   {
     return SNMALLOC_NAME_MANGLE(memalign)(OS_PAGE_SIZE, size);
@@ -257,14 +257,13 @@ extern "C"
   SNMALLOC_EXPORT void* SNMALLOC_NAME_MANGLE(snmalloc_pagemap_global_get)(
     PagemapConfig const** config)
   {
+    auto& pm = GlobalPagemap::pagemap();
     if (config)
     {
-      *config = &decltype(snmalloc::global_pagemap)::config;
-      assert(
-        decltype(snmalloc::global_pagemap)::cast_to_pagemap(
-          &snmalloc::global_pagemap, *config) == &snmalloc::global_pagemap);
+      *config = &SuperslabPagemap::config;
+      assert(SuperslabPagemap::cast_to_pagemap(&pm, *config) == &pm);
     }
-    return &snmalloc::global_pagemap;
+    return &pm;
   }
 #endif
 

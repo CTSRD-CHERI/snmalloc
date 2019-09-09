@@ -1,54 +1,36 @@
 #pragma once
 
 #ifdef __APPLE__
-#  include "../ds/bits.h"
-#  include "../mem/allocconfig.h"
+#  include "pal_bsd.h"
 
-#  include <pthread.h>
-#  include <strings.h>
-#  include <sys/mman.h>
-
-extern "C" int puts(const char* str);
+#  include <mach/vm_statistics.h>
 
 namespace snmalloc
 {
   /**
    * PAL implementation for Apple systems (macOS, iOS, watchOS, tvOS...).
    */
-  class PALApple
+  template<int PALAnonID = PALAnonDefaultID>
+  class PALApple : public PALBSD<PALApple<>>
   {
   public:
     /**
-     * Bitmap of PalFeatures flags indicating the optional features that this
-     * PAL supports.
+     * The features exported by this PAL.
+     *
+     * Currently, these are identical to the generic BSD PAL.  This field is
+     * declared explicitly to remind anyone who modifies this class that they
+     * should add any required features.
      */
-    static constexpr uint64_t pal_features = LazyCommit;
-    static void error(const char* const str)
-    {
-      puts(str);
-      abort();
-    }
+    static constexpr uint64_t pal_features = PALBSD::pal_features;
 
-    /// Notify platform that we will not be using these pages
-    void notify_not_using(void* p, size_t size) noexcept
-    {
-      assert(bits::is_aligned_block<OS_PAGE_SIZE>(p, size));
-      madvise(p, size, MADV_FREE);
-    }
-
-    /// Notify platform that we will be using these pages
-    template<ZeroMem zero_mem>
-    void notify_using(void* p, size_t size) noexcept
-    {
-      assert(
-        bits::is_aligned_block<OS_PAGE_SIZE>(p, size) || (zero_mem == NoZero));
-      if constexpr (zero_mem == YesZero)
-        zero(p, size);
-    }
-
-    /// OS specific function for zeroing memory
+    /**
+     *  OS specific function for zeroing memory with the Apple application
+     *  tag id.
+     *
+     *  See comment below.
+     */
     template<bool page_aligned = false>
-    void zero(void* p, size_t size) noexcept
+    void zero(void* p, size_t size)
     {
       if (page_aligned || bits::is_aligned_block<OS_PAGE_SIZE>(p, size))
       {
@@ -58,7 +40,7 @@ namespace snmalloc
           size,
           PROT_READ | PROT_WRITE,
           MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
-          -1,
+          pal_anon_id,
           0);
 
         if (r != MAP_FAILED)
@@ -68,15 +50,20 @@ namespace snmalloc
       bzero(p, size);
     }
 
+    /**
+     * Reserve memory with the Apple application tag id.
+     *
+     * See comment below.
+     */
     template<bool committed>
-    void* reserve(size_t* size) noexcept
+    void* reserve(const size_t* size)
     {
       void* p = mmap(
-        NULL,
+        nullptr,
         *size,
         PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS,
-        -1,
+        pal_anon_id,
         0);
 
       if (p == MAP_FAILED)
@@ -84,6 +71,18 @@ namespace snmalloc
 
       return p;
     }
+
+  private:
+    /**
+     * Anonymous page tag ID
+     *
+     * Darwin platform allows to gives an ID to anonymous pages via
+     * the VM_MAKE_TAG's macro, from 240 up to 255 are guaranteed
+     * to be free of usage, however eventually a lower could be taken
+     * (e.g. LLVM sanitizers has 99) so we can monitor their states
+     * via vmmap for instance.
+     */
+    static constexpr int pal_anon_id = VM_MAKE_TAG(PALAnonID);
   };
-}
+} // namespace snmalloc
 #endif

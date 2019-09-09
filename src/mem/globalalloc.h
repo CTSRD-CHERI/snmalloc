@@ -38,7 +38,7 @@ namespace snmalloc
 
     static AllocPool* make() noexcept
     {
-      return make(default_memory_provider);
+      return AllocPool::make(default_memory_provider());
     }
 
     Alloc* acquire()
@@ -107,30 +107,26 @@ namespace snmalloc
 #endif
     }
 
-    void debug_check_empty()
+    /**
+      If you pass a pointer to a bool, then it returns whether all the
+      allocators are empty. If you don't pass a pointer to a bool, then will
+      raise an error all the allocators are not empty.
+     */
+    void debug_check_empty(bool* result = nullptr)
     {
 #ifndef USE_MALLOC
       // This is a debugging function. It checks that all memory from all
       // allocators has been freed.
-      size_t alloc_count = 0;
-      size_t empty_count;
-
       auto* alloc = Parent::iterate();
-
-      // Count the linked allocators.
-      while (alloc != nullptr)
-      {
-        alloc = Parent::iterate(alloc);
-        alloc_count++;
-      }
 
       bool done = false;
 
+      size_t non_empty_count = 0;
       while (!done)
       {
-        empty_count = 0;
         done = true;
         alloc = Parent::iterate();
+        non_empty_count = 0;
 
         while (alloc != nullptr)
         {
@@ -159,8 +155,9 @@ namespace snmalloc
           alloc->quarantine.debug_drain_all(alloc, true);
 #  endif
 
-          if (alloc->stats().is_empty())
-            empty_count++;
+          // Check that the allocator has freed all memory.
+          if (!alloc->stats().is_empty())
+            non_empty_count++;
 
 #  if SNMALLOC_QUARANTINE_DEALLOC == 1
           alloc->quarantine.init(alloc);
@@ -182,8 +179,18 @@ namespace snmalloc
         }
       }
 
-      if (alloc_count != empty_count)
-        error("Incorrect number of allocators");
+      if (result != nullptr)
+      {
+        *result = non_empty_count == 0;
+        return;
+      }
+
+      if (non_empty_count != 0)
+      {
+        error("debug_check_empty: found non-empty allocators");
+      }
+#else
+      UNUSED(result);
 #endif
     }
   };

@@ -117,23 +117,32 @@ namespace snmalloc
     FlatPagemap<SUPERSLAB_BITS, PAGEMAP_VALUE_T>,
     Pagemap<SUPERSLAB_BITS, PAGEMAP_VALUE_T, PAGEMAP_VALUE_Z>>;
 
-  HEADER_GLOBAL SuperslabPagemap global_pagemap;
-
   /**
    * Mixin used by `SuperslabMap` to directly access the pagemap via a global
    * variable.  This should be used from within the library or program that
    * owns the pagemap.
+   *
+   * This class makes the global pagemap a typed singleton so that its name
+   * includes the type mangling.  If two compilation units try to instantiate
+   * two different types of pagemap then they will see two distinct pagemaps.
+   * This will prevent allocating with one and freeing with the other (because
+   * the memory will show up as not owned by any allocator in the other
+   * compilation unit) but will prevent the same memory being interpreted as
+   * having two different types.
    */
-  struct GlobalPagemap
+  template<typename T>
+  struct GlobalPagemapTemplate
   {
     /**
      * Returns the pagemap.
      */
-    SuperslabPagemap& pagemap()
+    static SuperslabPagemap& pagemap()
     {
-      return global_pagemap;
+      return TypedSingleton<SuperslabPagemap>::global;
     }
   };
+
+  using GlobalPagemap = GlobalPagemapTemplate<SuperslabPagemap>;
 
   /**
    * Optionally exported function that accesses the global pagemap provided by
@@ -153,7 +162,7 @@ namespace snmalloc
     /**
      * A pointer to the pagemap.
      */
-    SuperslabPagemap* external_pagemap;
+    inline static SuperslabPagemap* external_pagemap;
 
   public:
     /**
@@ -172,7 +181,7 @@ namespace snmalloc
     /**
      * Returns the exported pagemap.
      */
-    SuperslabPagemap& pagemap()
+    static SuperslabPagemap& pagemap()
     {
       return *external_pagemap;
     }
@@ -1299,7 +1308,7 @@ namespace snmalloc
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        privp = page_map.getp(p);
+        privp = pagemap().getp(p);
       }
 
       uint8_t pmsc = pagemap().get(address_cast(privp));
@@ -1359,7 +1368,7 @@ namespace snmalloc
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        privp = page_map.getp(p);
+        privp = pagemap().getp(p);
       }
 
 #    if SNMALLOC_QUARANTINE_DEALLOC == 1
@@ -1409,7 +1418,7 @@ namespace snmalloc
         assert(res == 0);
         privpred = cheri_csetboundsexact(privp, size);
 #      endif
-        pmsc = page_map.get(p);
+        pmsc = PageMap::pagemap().get(p);
 
         /* XXX revise if MPROT_QUARANTINE */
         if constexpr (
@@ -1496,7 +1505,7 @@ namespace snmalloc
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        privp = page_map.getp(p);
+        privp = pagemap().getp(p);
       }
 
 #    if SNMALLOC_QUARANTINE_DEALLOC == 1
@@ -1648,7 +1657,7 @@ namespace snmalloc
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        privp = page_map.getp(p);
+        privp = pagemap().getp(p);
       }
 
 #  if SNMALLOC_QUARANTINE_DEALLOC == 1
@@ -1810,12 +1819,12 @@ namespace snmalloc
       error("Unsupported");
       UNUSED(p);
 #else
-      uint8_t size = pagemap().get(address_cast(p));
+      uint8_t size = page_map.get(address_cast(p));
 
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        privp = page_map.getp(p);
+        privp = pagemap().getp(p);
       }
 
 #  if defined(__CHERI__)
@@ -1882,7 +1891,7 @@ namespace snmalloc
         {
           // This is a large alloc redirect.
           ss = ss - (1ULL << (size - 64));
-          size = pagemap().get(ss);
+          size = PageMap::pagemap().get(ss);
         }
       }
 
@@ -1926,11 +1935,11 @@ namespace snmalloc
     size_t alloc_size(void* p)
     {
       // This must be called on an external pointer.
-      size_t size = pagemap().get(address_cast(p));
+      size_t size = page_map.get(address_cast(p));
 
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
       {
-        p = page_map.getp(p);
+        p = pagemap().getp(p);
       }
 
       if (size == 0)
@@ -2458,6 +2467,7 @@ namespace snmalloc
       void* head = fl.value;
       if (likely(head != nullptr))
       {
+        stats().sizeclass_alloc(sizeclass);
         // Read the next slot from the memory that's about to be allocated.
         fl.value = Metaslab::follow_next(head);
 
@@ -2466,7 +2476,6 @@ namespace snmalloc
         {
           large_allocator.memory_provider.zero(p, size);
         }
-        stats().sizeclass_alloc(sizeclass);
         return p;
       }
 
@@ -2481,10 +2490,12 @@ namespace snmalloc
         return reinterpret_cast<Allocator*>(replacement)
           ->template small_alloc_slow<zero_mem, allow_reserve>(sizeclass);
       }
+
+      stats().sizeclass_alloc(sizeclass);
+
       handle_message_queue();
       size_t rsize = sizeclass_to_size(sizeclass);
       auto& sl = small_classes[sizeclass];
-      stats().sizeclass_alloc(sizeclass);
 
       Slab* slab;
 

@@ -11,9 +11,11 @@ namespace snmalloc
 #if !defined(OPEN_ENCLAVE) || defined(OPEN_ENCLAVE_SIMULATION)
 #  include "pal_apple.h"
 #  include "pal_cheribsd.h"
-#  include "pal_free_bsd_kernel.h"
 #  include "pal_freebsd.h"
+#  include "pal_freebsd_kernel.h"
 #  include "pal_linux.h"
+#  include "pal_netbsd.h"
+#  include "pal_openbsd.h"
 #  include "pal_windows.h"
 #endif
 #include "pal_open_enclave.h"
@@ -26,7 +28,7 @@ namespace snmalloc
 #  if defined(_WIN32)
     PALWindows;
 #  elif defined(__APPLE__)
-    PALApple;
+    PALApple<>;
 #  elif defined(__linux__)
     PALLinux;
 #  elif defined(FreeBSD_KERNEL)
@@ -37,6 +39,10 @@ namespace snmalloc
 #    else
     PALFBSD;
 #    endif
+#  elif defined(__NetBSD__)
+    PALNetBSD;
+#  elif defined(__OpenBSD__)
+    PALOpenBSD;
 #  else
 #    error Unsupported platform
 #  endif

@@ -431,5 +431,8 @@ namespace snmalloc
    * The memory provider that will be used if no other provider is explicitly
    * passed as an argument.
    */
-  HEADER_GLOBAL GlobalVirtual default_memory_provider;
+  inline GlobalVirtual& default_memory_provider()
+  {
+    return TypedSingleton<GlobalVirtual>::global;
+  }
 } // namespace snmalloc
