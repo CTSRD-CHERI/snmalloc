@@ -1098,6 +1098,8 @@ namespace snmalloc
 #    if SNMALLOC_QUARANTINE_CHATTY == 1
             uint64_t cyc_fini = AAL::tick();
             print_revoke_stats(stderr, "dbgw", a, &crst, cyc_init, cyc_fini);
+#    else
+            UNUSED(crst);
 #    endif
           }
 #  endif
@@ -1134,6 +1136,8 @@ namespace snmalloc
 #    if SNMALLOC_QUARANTINE_CHATTY == 1
             uint64_t cyc_fini = AAL::tick();
             print_revoke_stats(stderr, "dbgf", a, &crst, cyc_init, cyc_fini);
+#    else
+            UNUSED(crst);
 #    endif
           }
 #  endif
