@@ -863,6 +863,8 @@ namespace snmalloc
 #    if SNMALLOC_QUARANTINE_CHATTY == 1
           uint64_t cyc_fini = AAL::tick();
           print_revoke_stats(stderr, cause, a, &crst, cyc_init, cyc_fini);
+#    else
+          UNUSED(crst);
 #    endif
         } while (!epoch_clears(epoch, qn->full_epoch));
 #  else
