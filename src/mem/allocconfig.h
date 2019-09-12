@@ -101,6 +101,10 @@ namespace snmalloc
 
 #if SNMALLOC_REVOKE_QUARANTINE == 1
 
+#  ifndef SNMALLOC_REVOKE_THROUGHPUT
+#    define SNMALLOC_REVOKE_THROUGHPUT 0
+#  endif
+
 #  ifndef SNMALLOC_REVOKE_PARANOIA
 #    define SNMALLOC_REVOKE_PARANOIA 0
 #  endif

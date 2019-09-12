@@ -27,6 +27,11 @@ extern "C"
 #  include <inttypes.h>
 #  include <sys/caprevoke.h>
 }
+
+static const int caprevoke_go_flags =
+  CAPREVOKE_LAST_PASS |
+  ((SNMALLOC_REVOKE_THROUGHPUT != 0) ? CAPREVOKE_LAST_NO_EARLY : 0);
+
 #endif
 
 namespace snmalloc
@@ -846,7 +851,7 @@ namespace snmalloc
         UNUSED(cause);
 #    endif
 #    if SNMALLOC_REVOKE_DRY_RUN == 0
-          int res = caprevoke(CAPREVOKE_LAST_PASS, qn->full_epoch, &crst);
+          int res = caprevoke(caprevoke_go_flags, qn->full_epoch, &crst);
           UNUSED(res);
           assert(res == 0);
 #    else
@@ -1083,7 +1088,7 @@ namespace snmalloc
             uint64_t cyc_init = AAL::tick();
 #    endif
 #    if SNMALLOC_REVOKE_DRY_RUN == 0
-            int res = caprevoke(CAPREVOKE_LAST_PASS, qn->full_epoch, &crst);
+            int res = caprevoke(caprevoke_go_flags, qn->full_epoch, &crst);
             UNUSED(res);
             assert(res == 0);
             current_epoch = crst.epoch_fini; // XXX: cri->epoch_dequeue
@@ -1119,8 +1124,7 @@ namespace snmalloc
             uint64_t cyc_init = AAL::tick();
 #    endif
 #    if SNMALLOC_REVOKE_DRY_RUN == 0
-            int res = caprevoke(
-              CAPREVOKE_LAST_PASS | CAPREVOKE_IGNORE_START, start_epoch, &crst);
+            int res = caprevoke(caprevoke_go_flags, start_epoch, &crst);
             UNUSED(res);
             assert(res == 0);
             current_epoch = crst.epoch_fini; // XXX: cri->epoch_dequeue
