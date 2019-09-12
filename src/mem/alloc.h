@@ -32,6 +32,8 @@ static const int caprevoke_go_flags =
   CAPREVOKE_LAST_PASS |
   ((SNMALLOC_REVOKE_THROUGHPUT != 0) ? CAPREVOKE_LAST_NO_EARLY : 0);
 
+#else
+typedef uint64_t caprevoke_epoch;
 #endif
 
 namespace snmalloc
@@ -539,7 +541,7 @@ namespace snmalloc
       QuarantineNode* prev;
       QuarantineNode* next;
 
-      uint64_t full_epoch; /* When did this fill? */
+      caprevoke_epoch full_epoch; /* When did this fill? */
       size_t footprint; /* How many bytes of the heap do we represent? */
       uint32_t self_foot; /* What's the size of this object? */
       uint16_t n_ents; /* How many pointers are there in this node? */
@@ -774,7 +776,7 @@ namespace snmalloc
       }
 #  endif
 
-      static bool epoch_clears(uint64_t now, uint64_t test)
+      static bool epoch_clears(caprevoke_epoch now, caprevoke_epoch test)
       {
 #  if SNMALLOC_REVOKE_QUARANTINE == 1
         return caprevoke_epoch_clears(now, test);
@@ -789,7 +791,7 @@ namespace snmalloc
        * Given the current epoch clock, pull off sufficiently old quarantine
        * nodes and push all the pointers therein back to free.
        */
-      void drain(Allocator* a, uint64_t epoch)
+      void drain(Allocator* a, caprevoke_epoch epoch)
       {
         bool diddq = false;
         struct QuarantineNode* qn = waiting.get_head();
@@ -835,7 +837,7 @@ namespace snmalloc
        */
       void quarantine_step_drain(Allocator* a, const char* cause)
       {
-        caprevoke_epoch_t epoch;
+        caprevoke_epoch epoch;
 
 #  if SNMALLOC_REVOKE_QUARANTINE == 1
         struct caprevoke_stats crst;
@@ -875,7 +877,7 @@ namespace snmalloc
 
       void quarantine_step(Allocator* a)
       {
-        uint64_t epoch;
+        caprevoke_epoch epoch;
 #  if SNMALLOC_QUARANTINE_CHATTY == 1
         uint64_t fence_cycles = 0;
 #  endif
