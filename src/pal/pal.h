@@ -37,7 +37,7 @@ namespace snmalloc
 #    if defined(__CHERI_PURE_CAPABILITY__)
     PALCHERIBSD;
 #    else
-    PALFBSD;
+    PALFreeBSD;
 #    endif
 #  elif defined(__NetBSD__)
     PALNetBSD;
