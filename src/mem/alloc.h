@@ -753,10 +753,11 @@ namespace snmalloc
           f,
           "revoke: %s"
           " cyccount=0x%" PRIx64 " a=%p"
-          " einit=0x%03" PRIx64 " efini=0x%03" PRIx64 " scand=0x%" PRIx64
-          " pfro=0x%" PRIx64 " pfrw=0x%" PRIx64 " pfsk=0x%" PRIx64
-          " clook=0x%" PRIx64 " cnuke=0x%" PRIx64 " tpage=0x%" PRIx64
-          " tcrev=0x%" PRIx64 "\n",
+          " einit=0x%03" PRIx64 " efini=0x%03" PRIx64 " scand=0x%" PRIx32
+          " pfro=0x%" PRIx32 " pfrw=0x%" PRIx32 " psk=0x%" PRIx32
+          " pskf=0x%" PRIx32
+          " clook=0x%" PRIx32 " cnuke=0x%" PRIx32 " crevd=0x%" PRIx32
+          " tpage=0x%" PRIx64 " tcrev=0x%" PRIx64 "\n",
           what,
           cyc_fini,
           a,
@@ -765,9 +766,11 @@ namespace snmalloc
           crst->pages_scanned,
           crst->pages_faulted_ro,
           crst->pages_faulted_rw,
-          crst->pages_fault_skip,
+          crst->pages_skip,
+          crst->pages_skip_fast,
           crst->caps_found,
           crst->caps_cleared,
+          crst->caps_found_revoked,
           crst->page_scan_cycles,
           cyc_fini - cyc_init);
 #    ifdef __mips__
@@ -846,8 +849,9 @@ namespace snmalloc
         {
 #    if SNMALLOC_QUARANTINE_CHATTY == 1
           uint64_t cyc_init = AAL::tick();
-          fprintf(stderr, "revoke: %s begin cyccount=0x%" PRIx64 " a=%p\n",
-                  cause, cyc_init, a);
+          fprintf(stderr, "revoke: %s begin cyccount=0x%" PRIx64 " a=%p"
+                  " qn->fe=0x%" PRIx64 " cri->dq=0x%" PRIx64 "\n",
+                  cause, cyc_init, a, qn->full_epoch, cri->epoch_dequeue);
           cyc_init = AAL::tick();
 #    else
         UNUSED(cause);
