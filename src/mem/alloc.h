@@ -753,7 +753,8 @@ namespace snmalloc
           f,
           "revoke: %s"
           " cyccount=0x%" PRIx64 " a=%p"
-          " einit=0x%03" PRIx64 " efini=0x%03" PRIx64 " scand=0x%" PRIx32
+          " einit=0x%03" PRIx64 " efini=0x%03" PRIx64
+          " scanro=0x%" PRIx32 " scanrw=0x%" PRIx32
           " pfro=0x%" PRIx32 " pfrw=0x%" PRIx32 " psk=0x%" PRIx32
           " pskf=0x%" PRIx32
           " clook=0x%" PRIx32 " cnuke=0x%" PRIx32 " crevd=0x%" PRIx32
@@ -763,7 +764,8 @@ namespace snmalloc
           a,
           crst->epoch_init,
           crst->epoch_fini,
-          crst->pages_scanned,
+          crst->pages_scan_ro,
+          crst->pages_scan_rw,
           crst->pages_faulted_ro,
           crst->pages_faulted_rw,
           crst->pages_skip,
