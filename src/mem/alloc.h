@@ -1962,14 +1962,15 @@ namespace snmalloc
 
       if (size == 0)
       {
-        error("Not allocated by this allocator");
+        // Not allocated by this allocator
+        return 0;
       }
       else if (size == PMSuperslab)
       {
         Superslab* super = Superslab::get(p);
 
         // Reading a remote sizeclass won't fail, since the other allocator
-        // can't reuse the slab, as we have no yet deallocated this pointer.
+        // can't reuse the slab, as we have not yet deallocated this pointer.
         Slab* slab = Slab::get(p);
         Metaslab& meta = super->get_meta(slab);
 
