@@ -43,9 +43,20 @@ extern "C"
     return ThreadAlloc::get_noncachable()->alloc<ZeroMem::YesZero>(sz);
   }
 
+  SNMALLOC_EXPORT void* SNMALLOC_NAME_MANGLE(malloc_underlying_allocation)(void* ptr)
+  {
+    return ThreadAlloc::get()->external_pointer<Start>(ptr);
+  }
+
   SNMALLOC_EXPORT size_t SNMALLOC_NAME_MANGLE(malloc_usable_size)(void* ptr)
   {
-    return Alloc::alloc_size(ptr);
+    size_t allocation_size = ThreadAlloc::get()->alloc_size(ptr);
+#ifndef __CHERI_PURE_CAPABILITY__
+    return allocation_size;
+#else
+    size_t cap_length = cheri_getlen(ptr);
+    return cap_length < allocation_size ? cap_length : allocation_size;
+#endif
   }
 
   SNMALLOC_EXPORT void* SNMALLOC_NAME_MANGLE(realloc)(void* ptr, size_t size)
