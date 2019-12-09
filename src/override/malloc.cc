@@ -45,7 +45,7 @@ extern "C"
 
   SNMALLOC_EXPORT void* SNMALLOC_NAME_MANGLE(malloc_underlying_allocation)(void* ptr)
   {
-    return ThreadAlloc::get()->external_pointer<Start>(ptr);
+    return ThreadAlloc::get()->external_pointer_rederive<Start>(ptr);
   }
 
   SNMALLOC_EXPORT size_t SNMALLOC_NAME_MANGLE(malloc_usable_size)(void* ptr)

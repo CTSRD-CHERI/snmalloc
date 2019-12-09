@@ -53,6 +53,21 @@ namespace snmalloc
            (cheri_getperm(p) != 0) &&
            (cheri_getoffset(p) == 0);
   }
+
+  /**
+   * Given a capability, a size, and a "super capbility", use the base of the
+   * capability and the passed-in size to derive a new capability from the
+   * super capability. This function is useful for giving back a VMMAP bearing
+   * capability to mrs and should be removed in a post-mrs world.
+   */
+  static inline void*
+  rederive_application_cap(void* p, size_t alloc_size, void* super_p)
+  {
+    void *ret = cheri_csetboundsexact(cheri_setaddress(super_p, cheri_getbase(p)),
+        alloc_size);
+    ret = cheri_andperm(ret, CHERI_PERMS_USERSPACE_DATA);
+    return ret;
+  }
 #endif
 
   enum Boundary
@@ -1839,13 +1854,17 @@ namespace snmalloc
         remote_dealloc(target, p, sizeclass);
     }
 
-  public:
-    template<Boundary location = Start>
-    address_t external_address(void* p)
+    template<Boundary location = Start> inline
+    address_t external_address_internal(void* p, bool validate_and_rederive)
     {
+#  if !defined(__CHERI_PURE_CAPABILITY__)
+      UNUSED(validate_and_rederive);
+#  endif
+
 #ifdef USE_MALLOC
       error("Unsupported");
       UNUSED(p);
+      UNUSED(validate_and_rederive);
 #else
       uint8_t size = page_map.get(address_cast(p));
 
@@ -1888,6 +1907,18 @@ namespace snmalloc
         sizeclass_t sc = meta.sizeclass;
         void* slab_end = pointer_offset(slab, SLAB_SIZE);
 
+#  if defined(__CHERI_PURE_CAPABILITY__)
+        if (validate_and_rederive)
+        {
+          if (!validate_application_cap(p) ||
+              !slab->is_start_of_object(super, p))
+          {
+            return address_cast(static_cast<void*>(nullptr));
+          }
+          p = rederive_application_cap(p, sizeclass_to_size(sc), privp);
+        }
+#  endif
+
         return external_pointer<location>(p, sc, slab_end);
       }
       if (size == PMMediumslab)
@@ -1896,6 +1927,21 @@ namespace snmalloc
 
         sizeclass_t sc = slab->get_sizeclass();
         void* slab_end = pointer_offset(slab, SUPERSLAB_SIZE);
+
+#  if defined(__CHERI_PURE_CAPABILITY__)
+        if (validate_and_rederive)
+        {
+          size_t rsize = sizeclass_to_size(sc);
+          if (!validate_application_cap(p) ||
+              !is_multiple_of_sizeclass(rsize,
+                pointer_diff(p,
+                  pointer_offset(slab, SUPERSLAB_SIZE))))
+          {
+            return address_cast(static_cast<void*>(nullptr));
+          }
+          p = rederive_application_cap(p, rsize, privp);
+        }
+#  endif
 
         return external_pointer<location>(p, sc, slab_end);
       }
@@ -1941,7 +1987,20 @@ namespace snmalloc
       }
 
 #  if defined(__CHERI_PURE_CAPABILITY__)
-      ss = address_cast(cheri_setaddress(p, ss));
+      if (validate_and_rederive)
+      {
+        if (!validate_application_cap(p) ||
+            (address_cast(super) != address_cast(p)))
+        {
+          return address_cast(static_cast<void*>(nullptr));
+        }
+        p = rederive_application_cap(p, 1ULL << size, pointer_cast<void*>(ss));
+        ss = address_cast(p);
+      }
+      else
+      {
+        ss = address_cast(cheri_setaddress(p, ss));
+      }
 #  endif
 
       // This is a large alloc, mask off to the slab size.
@@ -1952,6 +2011,23 @@ namespace snmalloc
       else
         return (ss + (1ULL << size));
 #endif
+    }
+
+  public:
+    template<Boundary location = Start>
+    address_t external_address(void* p)
+    {
+      return external_address_internal(p, false);
+    }
+
+    /**
+     * Used to support mrs. Remove this and the internal function
+     * post-mrs.
+     */
+    template<Boundary location = Start>
+    void* external_pointer_rederive(void* p)
+    {
+      return pointer_cast<void>(external_address_internal<location>(p, true));
     }
 
     template<Boundary location = Start>
