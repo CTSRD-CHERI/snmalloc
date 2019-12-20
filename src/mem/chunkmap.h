@@ -3,6 +3,7 @@
 using namespace std;
 
 #include "../ds/address.h"
+#include "chunkmap_consts.h"
 #include "largealloc.h"
 #include "mediumslab.h"
 #include "pagemap.h"
@@ -10,32 +11,6 @@ using namespace std;
 
 namespace snmalloc
 {
-  enum ChunkMapSuperslabKind
-  {
-    CMNotOurs = 0,
-    CMSuperslab = 1,
-    CMMediumslab = 2
-
-    /*
-     * Values 3 (inclusive) through SUPERSLAB_BITS (exclusive) are as yet
-     * unused.
-     *
-     * Values SUPERSLAB_BITS (inclusive) through 64 (exclusive, as it would
-     * represent the entire address space) are used for log2(size) at the
-     * heads of large allocations.  See SuperslabMap::set_large_size.
-     *
-     * Values 64 (inclusive) through 128 (exclusive) are used for entries
-     * within a large allocation.  A value of x at pagemap entry p indicates
-     * that there are at least 2^(x-64) (inclusive) and at most 2^(x+1-64)
-     * (exclusive) page map entries between p and the start of the
-     * allocation.  See SuperslabMap::set_large_size and external_address's
-     * handling of large reallocation redirections.
-     *
-     * Values 128 (inclusive) through 255 (inclusive) are as yet unused.
-     */
-
-  };
-
   /*
    * Ensure that ChunkMapSuperslabKind values are actually disjoint, i.e.,
    * that large allocations don't land on CMMediumslab.
@@ -49,15 +24,12 @@ namespace snmalloc
 #endif
 
   template<typename T>
-  static constexpr bool use_flatpagemap_for()
-  {
-    return pal_supports<LazyCommit> ||
-      (SNMALLOC_MAX_FLATPAGEMAP_SIZE >= sizeof(FlatPagemap<SUPERSLAB_BITS, T>));
-  }
+  static constexpr bool use_flatpagemap = pal_supports<LazyCommit> ||
+    (SNMALLOC_MAX_FLATPAGEMAP_SIZE >= sizeof(FlatPagemap<SUPERSLAB_BITS, T>));
 
   template<auto V>
   using DefaultChunkmapPagemapTemplate = std::conditional_t<
-    use_flatpagemap_for<decltype(V)>(),
+    use_flatpagemap<decltype(V)>,
     FlatPagemap<SUPERSLAB_BITS, decltype(V)>,
     Pagemap<SUPERSLAB_BITS, decltype(V), V>>;
 
@@ -143,13 +115,17 @@ namespace snmalloc
    * `Allocator` as a template argument and so can be replaced by a compatible
    * implementation (for example, to move pagemap updates to a different
    * protection domain).
+   *
+   * Because we heavily rely on static dispatch, this is declared final to
+   * prevent accidental confusion.  Replacement `ChunkMap`s should provide the
+   * complete implentation of this interface.
    */
   template<
     template<typename>
     typename PagemapProviderTemplate,
     template<auto>
     typename ChunkmapPagemapTemplate>
-  struct DefaultChunkMap
+  struct DefaultChunkMap final
   {
     using ChunkmapPagemap = ChunkmapPagemapTemplate<static_cast<uint8_t>(0)>;
     using PagemapProvider = PagemapProviderTemplate<ChunkmapPagemap>;

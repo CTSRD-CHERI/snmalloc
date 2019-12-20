@@ -1,7 +1,7 @@
 #pragma once
 
-#include "allocconfig.h"
 #include "../pal/pal.h"
+#include "allocconfig.h"
 
 namespace snmalloc
 {
