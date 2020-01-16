@@ -1402,7 +1402,7 @@ namespace snmalloc
       return free(p);
 #  else
 
-#if defined(__CHERI_PURE_CAPABILITY__)
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p) || (cheri_getlen(p) != size))
       {
         return;
@@ -1412,6 +1412,16 @@ namespace snmalloc
 #    if SNMALLOC_QUARANTINE_DEALLOC == 0
       handle_message_queue();
 #    endif
+
+#  if SNMALLOC_QUARANTINE_DEALLOC == 1
+      /*
+       * Without quarantine, this is handled on the slow path,
+       * and while we could defer the "Not allocated" test to
+       * post-quarantine, it's probably better to do it now.
+       */
+      if (p == nullptr)
+        return;
+#  endif
 
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
@@ -1537,7 +1547,7 @@ namespace snmalloc
       return free(p);
 #  else
 
-#if defined(__CHERI_PURE_CAPABILITY__)
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p) || (cheri_getlen(p) != size))
       {
         return;
@@ -1547,6 +1557,16 @@ namespace snmalloc
 #    if SNMALLOC_QUARANTINE_DEALLOC == 0
       handle_message_queue();
 #    endif
+
+#  if SNMALLOC_QUARANTINE_DEALLOC == 1
+      /*
+       * Without quarantine, this is handled on the slow path,
+       * and while we could defer the "Not allocated" test to
+       * post-quarantine, it's probably better to do it now.
+       */
+      if (p == nullptr)
+        return;
+#  endif
 
       void* privp = p;
       if constexpr (SNMALLOC_PAGEMAP_REDERIVE)
@@ -1690,7 +1710,17 @@ namespace snmalloc
       return free(p);
 #else
 
-#if defined(__CHERI_PURE_CAPABILITY__)
+#  if SNMALLOC_QUARANTINE_DEALLOC == 1
+      /*
+       * Without quarantine, this is handled on the slow path,
+       * and while we could defer the "Not allocated" test to
+       * post-quarantine, it's probably better to do it now.
+       */
+      if (p == nullptr)
+        return;
+#  endif
+
+#if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p))
       {
         return;
@@ -1828,7 +1858,7 @@ namespace snmalloc
         error("Not allocated by this allocator");
       }
 
-#if defined(CHECK_CLIENT) || defined(__CHERI_PURE_CAPABILITY__)
+#if defined(CHECK_CLIENT)
       Superslab* super = Superslab::get(p);
       if (size > 64 || address_cast(super) != address_cast(p))
       {
@@ -2626,7 +2656,7 @@ namespace snmalloc
     SNMALLOC_FAST_PATH void
     small_dealloc(Superslab* super, void* p, sizeclass_t sizeclass)
     {
-#if defined(CHECK_CLIENT) || defined(__CHERI_PURE_CAPABILITY__)
+#if defined(CHECK_CLIENT)
       Slab* slab = Slab::get(p);
       if (!slab->is_start_of_object(super, p))
       {
@@ -2789,7 +2819,7 @@ namespace snmalloc
       }
       bool was_full = slab->dealloc(p);
 
-#if defined(CHECK_CLIENT) || defined(__CHERI_PURE_CAPABILITY__)
+#if defined(CHECK_CLIENT)
       if (!is_multiple_of_sizeclass(
             sizeclass_to_size(sizeclass),
             pointer_diff(p, pointer_offset(slab, SUPERSLAB_SIZE))))
