@@ -39,6 +39,21 @@ namespace snmalloc
            (cheri_getperm(p) != 0) &&
            (cheri_getoffset(p) == 0);
   }
+
+  /**
+   * Given a capability, a size, and a "super capbility", use the base of the
+   * capability and the passed-in size to derive a new capability from the
+   * super capability. This function is useful for giving back a VMMAP bearing
+   * capability to mrs and should be removed in a post-mrs world.
+   */
+  static inline void*
+  rederive_application_cap(void* p, size_t alloc_size, void* super_p)
+  {
+    void *ret = cheri_csetboundsexact(cheri_setaddress(super_p, cheri_getbase(p)),
+        alloc_size);
+    ret = cheri_andperm(ret, CHERI_PERMS_USERSPACE_DATA);
+    return ret;
+  }
 #endif
 
   enum Boundary
@@ -395,7 +410,7 @@ namespace snmalloc
 #endif
     }
 
-    template<Boundary location = Start>
+    template<Boundary location = Start, bool rederive = false>
     static address_t external_address(void* p)
     {
 #ifdef USE_MALLOC
@@ -413,6 +428,18 @@ namespace snmalloc
         sizeclass_t sc = meta.sizeclass;
         void* slab_end = pointer_offset(slab, SLAB_SIZE);
 
+#  if defined(__CHERI_PURE_CAPABILITY__)
+        if constexpr (rederive)
+        {
+          if (!validate_application_cap(p) ||
+              !slab->is_start_of_object(super, p))
+          {
+            return address_cast(static_cast<void*>(nullptr));
+          }
+          p = rederive_application_cap(p, sizeclass_to_size(sc), p);
+        }
+#  endif
+
         return external_pointer<location>(p, sc, slab_end);
       }
       if (size == CMMediumslab)
@@ -421,6 +448,21 @@ namespace snmalloc
 
         sizeclass_t sc = slab->get_sizeclass();
         void* slab_end = pointer_offset(slab, SUPERSLAB_SIZE);
+
+#  if defined(__CHERI_PURE_CAPABILITY__)
+        if constexpr (rederive)
+        {
+          size_t rsize = sizeclass_to_size(sc);
+          if (!validate_application_cap(p) ||
+              !is_multiple_of_sizeclass(rsize,
+                pointer_diff(p,
+                  pointer_offset(slab, SUPERSLAB_SIZE))))
+          {
+            return address_cast(static_cast<void*>(nullptr));
+          }
+          p = rederive_application_cap(p, rsize, p);
+        }
+#  endif
 
         return external_pointer<location>(p, sc, slab_end);
       }
@@ -444,6 +486,23 @@ namespace snmalloc
           return 0;
       }
 
+#  if defined(__CHERI_PURE_CAPABILITY__)
+      if constexpr (rederive)
+      {
+        if (!validate_application_cap(p) ||
+            (address_cast(super) != address_cast(p)))
+        {
+          return address_cast(static_cast<void*>(nullptr));
+        }
+        p = rederive_application_cap(p, 1ULL << size, pointer_cast<void*>(ss));
+        ss = address_cast(p);
+      }
+      else
+      {
+        ss = address_cast(cheri_setaddress(p, ss));
+      }
+#  endif
+
       // This is a large alloc, mask off to the slab size.
       if constexpr (location == Start)
         return ss;
@@ -454,10 +513,10 @@ namespace snmalloc
 #endif
     }
 
-    template<Boundary location = Start>
+    template<Boundary location = Start, bool rederive = false>
     static void* external_pointer(void* p)
     {
-      return pointer_cast<void>(external_address<location>(p));
+      return pointer_cast<void>(external_address<location, rederive>(p));
     }
 
     static size_t alloc_size(void* p)
