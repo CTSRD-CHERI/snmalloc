@@ -1368,18 +1368,26 @@ namespace snmalloc
         Slab* slab = Slab::get(privp);
         Metaslab& meta = super->get_meta(slab);
         uint8_t sc = meta.sizeclass;
-        assert(sc == size_to_sizeclass(claimed));
+        if (sc != size_to_sizeclass(claimed))
+        {
+          error("verify_size PMSuperslab failed");
+        }
       }
       else if (pmsc == PMMediumslab)
       {
         Mediumslab* slab = Mediumslab::get(privp);
         size_t sc = slab->get_sizeclass();
-        assert(sc == size_to_sizeclass(claimed));
+        if (sc != size_to_sizeclass(claimed))
+        {
+          error("verify_size PMMediumslab failed");
+        }
       }
       else
       {
-        assert(pmsc < 64);
-        assert(pmsc == bits::next_pow2_bits(claimed));
+        if (pmsc >= 64 || pmsc != bits::next_pow2_bits(claimed))
+        {
+          error("verify_size large failed");
+        }
       }
     }
 #endif
