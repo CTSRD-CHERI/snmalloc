@@ -156,24 +156,35 @@ namespace snmalloc
         return calloc(1, size);
 #else
       constexpr sizeclass_t sizeclass = size_to_sizeclass_const(size);
+      void* ret;
 
       stats().alloc_request(size);
 
       if constexpr (sizeclass < NUM_SMALL_CLASSES)
       {
-        return small_alloc<zero_mem, allow_reserve>(size);
+        ret = small_alloc<zero_mem, allow_reserve>(size);
       }
       else if constexpr (sizeclass < NUM_SIZECLASSES)
       {
         handle_message_queue();
         constexpr size_t rsize = sizeclass_to_size(sizeclass);
-        return medium_alloc<zero_mem, allow_reserve>(sizeclass, rsize, size);
+        ret = medium_alloc<zero_mem, allow_reserve>(sizeclass, rsize, size);
       }
       else
       {
         handle_message_queue();
-        return large_alloc<zero_mem, allow_reserve>(size);
+        ret = large_alloc<zero_mem, allow_reserve>(size);
       }
+
+#  if SNMALLOC_CHERI_SETBOUNDS == 1
+      ret = (ret == NULL) ?
+        ret :
+        cheri_andperm(
+          cheri_csetboundsexact(ret, size),
+          CHERI_PERMS_USERSPACE_DATA & ~CHERI_PERM_CHERIABI_VMMAP);
+#  endif
+
+      return ret;
 #endif
     }
 
@@ -192,6 +203,8 @@ namespace snmalloc
       else
         return calloc(1, size);
 #else
+      void* ret;
+
       stats().alloc_request(size);
 
       // Perform the - 1 on size, so that zero wraps around and ends up on
@@ -200,10 +213,23 @@ namespace snmalloc
       {
         // Allocations smaller than the slab size are more likely. Improve
         // branch prediction by placing this case first.
-        return small_alloc<zero_mem, allow_reserve>(size);
+        ret = small_alloc<zero_mem, allow_reserve>(size);
+      }
+      else
+      {
+        ret = alloc_not_small<zero_mem, allow_reserve>(size);
       }
 
-      return alloc_not_small<zero_mem, allow_reserve>(size);
+#  if SNMALLOC_CHERI_SETBOUNDS == 1
+      // XXX setboundsexact had unrepresentable bounds
+      ret = (ret == NULL) ?
+        ret :
+        cheri_andperm(
+          cheri_csetbounds(ret, size),
+          CHERI_PERMS_USERSPACE_DATA & ~CHERI_PERM_CHERIABI_VMMAP);
+#  endif
+
+      return ret;
     }
 
     template<ZeroMem zero_mem = NoZero, AllowReserve allow_reserve = YesReserve>
@@ -417,16 +443,18 @@ namespace snmalloc
       error("Unsupported");
       UNUSED(p);
 #else
-      uint8_t size = ChunkMap::get(address_cast(p));
+      void *privp = SNMALLOC_DEFAULT_CHUNKMAP::getp(p);
+      uint8_t size = ChunkMap::get(address_cast(privp));
 
-      Superslab* super = Superslab::get(p);
+      Superslab* super = Superslab::get(privp);
       if (size == CMSuperslab)
       {
-        Slab* slab = Metaslab::get_slab(p);
+        Slab* slab = Metaslab::get_slab(privp);
         Metaslab& meta = super->get_meta(slab);
 
         sizeclass_t sc = meta.sizeclass;
-        void* slab_end = pointer_offset(slab, SLAB_SIZE);
+        // XXX not used below
+        //void* slab_end = pointer_offset(slab, SLAB_SIZE);
 
 #  if defined(__CHERI_PURE_CAPABILITY__)
         if constexpr (rederive)
@@ -436,18 +464,23 @@ namespace snmalloc
           {
             return address_cast(static_cast<void*>(nullptr));
           }
-          p = rederive_application_cap(p, sizeclass_to_size(sc), p);
+          p = rederive_application_cap(p, sizeclass_to_size(sc), privp);
         }
 #  endif
 
-        return external_pointer<location>(p, sc, slab_end);
+        return address_cast<uint8_t>(static_cast<uint8_t*>(p));
+        // XXX below use of slab_end with pointer math results in a large
+        // capability with some offset rather than a tightly bound one with
+        // offset 0
+        //return external_pointer<location>(p, sc, slab_end);
       }
       if (size == CMMediumslab)
       {
-        Mediumslab* slab = Mediumslab::get(p);
+        Mediumslab* slab = Mediumslab::get(privp);
 
         sizeclass_t sc = slab->get_sizeclass();
-        void* slab_end = pointer_offset(slab, SUPERSLAB_SIZE);
+        // XXX see above
+        //void* slab_end = pointer_offset(slab, SUPERSLAB_SIZE);
 
 #  if defined(__CHERI_PURE_CAPABILITY__)
         if constexpr (rederive)
@@ -460,11 +493,13 @@ namespace snmalloc
           {
             return address_cast(static_cast<void*>(nullptr));
           }
-          p = rederive_application_cap(p, rsize, p);
+          p = rederive_application_cap(p, rsize, privp);
         }
 #  endif
 
-        return external_pointer<location>(p, sc, slab_end);
+        return address_cast<uint8_t>(static_cast<uint8_t*>(p));
+        // XXX see above
+        //return external_pointer<location>(p, sc, slab_end);
       }
 
       auto ss = address_cast(super);
