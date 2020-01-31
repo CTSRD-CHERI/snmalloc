@@ -1413,7 +1413,7 @@ namespace snmalloc
 #if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p) || (cheri_getlen(p) != size))
       {
-        return;
+        error("Deallocated capability failed validation");
       }
 #endif
 
@@ -1558,7 +1558,7 @@ namespace snmalloc
 #if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p) || (cheri_getlen(p) != size))
       {
-        return;
+        error("Deallocated capability failed validation");
       }
 #endif
 
@@ -1731,7 +1731,7 @@ namespace snmalloc
 #if defined(__CHERI_PURE_CAPABILITY__) && defined(CHECK_CLIENT)
       if (!validate_application_cap(p))
       {
-        return;
+        error("Deallocated capability failed validation");
       }
 #endif
 
